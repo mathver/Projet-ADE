@@ -1,0 +1,1447 @@
+---
+title: "Analyse de données exploratoires"
+author: "Mathieu VERON Alexandre JEANNE Pierre LARCHER"
+date: ' '
+lang: fr
+output:
+  rmdformats::material:
+  html_document:
+    dev: png
+    df_print: paged
+    highlight: null
+    theme: flatly
+    toc: yes
+    toc_float: True
+    collapsed: no
+    smooth_scroll: yes
+editor_options:
+  chunk_output_type: console
+  markdown: 
+    wrap: sentence
+---
+
+```{r setup, echo = FALSE}
+knitr::opts_chunk$set(echo = F, message = F, warning = F, fig.width = 8, fig.asp = 0.7,  fig.align = 'center')
+
+#Ci-dessous code css pour l'esthétique de l'HTML.
+```
+
+```{r color}
+col1 = "#47BB81"
+col2 = "#47BB47"
+col3 = "#81BB47"
+col4 = "#BBBB47"
+col5 = "#BB4747"
+colH = "#5774DF"
+colF = "#D382E0"
+colBar1 = "#479DBB"
+colBar2 = "#9E62D3"
+colBar3 = "#89C67C"
+colBar4 = "#BA9C44"
+colG = "#187F23"
+colD = "#BB2222"
+```
+
+```{css}
+.header-panel {
+    background-color: #159957;
+       background-image:linear-gradient(120deg,#2b5e77,#86ABB9);
+    min-height: 144px;
+    position: relative;
+    z-index: 3;
+}
+```
+
+
+```{r packages}
+library(prettydoc) #Important pour la compilation pour le thème
+library(factoextra)
+library(FactoMineR)
+library(corrplot)
+library(kableExtra)
+library(DT)
+library(data.table)
+library(tidyr)
+library(tidyverse)
+library(questionr)
+library(cowplot)
+library(ggpubr)
+library(ggcorrplot)
+library(missMDA)
+library(gplots)
+library(NbClust)
+```
+
+```{r import data}
+bd <- read.csv("responses.csv", header = T, sep = ",")
+```
+
+# **Description de la base de données**
+
+## Les variables
+
+Cette base de données provient d'une étude menée en 2013 en Slovaquie par des étudiants en statistiques auprès de leurs proches.</br>
+Les questions concernent un certain nombre de préférences comme les goûts musicaux, cinématographiques, ou encore des choses comme les traits de personnalités, les phobies, et bien sûr les caractéristiques démographiques des répondants.
+
+La base de données est composée de **`r ncol(bd)`** variables et contient **`r nrow(bd)`** observations.
+
+Nous allons nous concentrer sur les préférences musicales, et sur les caractéristiques démographiques. Nous omettrons donc le reste des variables.
+
+**Les variables présentes concernant la musique dans cette base sont :**
+
+- **J'apprécie la musique :** *De 1 à 5*
+- **Je préfère :** *Rythme lent à Rythme rapide (1 à 5)* 
+- **Dance, Disco, Funk :** *De 1 à 5* 
+- **Musique Folk :** *De 1 à 5* 
+- **Musique Country :** *De 1 à 5* 
+- **Musique Classique:** *De 1 à 5* 
+- **Musique Instrumentale:** *De 1 à 5* 
+- **Pop:** *De 1 à 5* 
+- **Rock:** *De 1 à 5* 
+- **Metal, Hard Rock :** *De 1 à 5* 
+- **Punk :** *De 1 à 5* 
+- **Hip-Hop, Rap :** *De 1 à 5* 
+- **Reggae, Ska :** *De 1 à 5* 
+- **Swing, Jazz :** *De 1 à 5* 
+- **Rock'n'Roll :** *De 1 à 5* 
+- **Musique Alternative :** *De 1 à 5* 
+- **Musique Latine :** *De 1 à 5* 
+- **Techno, Trance :** *De 1 à 5* 
+- **Opéra :** *De 1 à 5*
+- **Âge**
+- **Taille**
+- **Poids**
+- **Nombre de frères et soeurs**
+- **Genre**
+- **Droitier ou gaucher**
+- **Niveau d'éducation/diplôme**
+- **Enfant unique**
+- **Enfance en ville ou village**
+- **Enfance en maison ou appartement**
+
+Voici l'aperçu des différentes variables qui composent la base de données et des valeurs qu'elles prennent.
+
+
+```{r selection données}
+data <- bd[,c(1:19,141:150)]
+data$Height[data$Height==62] <- 162 # variable mal codée : taille de 62cm, recodage en 162cm
+
+data[data == ""] <- NA # recodage des cellules vides en NA
+
+character_vars <- lapply(data, class) == "character"
+data[, character_vars] <- lapply(data[, character_vars], as.factor)
+
+data <- data%>%
+  rename(Musique = Music)%>%
+  rename(Rythme = Slow.songs.or.fast.songs)%>%
+  rename(Classique = Classical.music)%>%
+  rename(Instrumental = Musical)%>%
+  rename(Metal_Hardrock = Metal.or.Hardrock)%>%
+  rename(Hiphop_Rap = Hiphop..Rap)%>%
+  rename(Reggea_Ska = Reggae..Ska)%>%
+  rename(Swing_Jazz = Swing..Jazz)%>%
+  rename(Rock_n_Roll = Rock.n.roll)%>%
+  rename(Techno_Trance = Techno..Trance)%>%
+  rename(Frere_Soeurs = Number.of.siblings)%>%
+  rename(Taille = Height)%>%
+  rename(Poids = Weight)%>%
+  rename(Genre = Gender)%>%
+  rename(Droitier_Gaucher = Left...right.handed)%>%
+  rename(Enfant_unique = Only.child)%>%
+  rename(Village_Ville = Village...town)%>%
+  rename(Maison_Appartement = House...block.of.flats)
+
+levels(data$Genre) <- c("Femme", "Homme")
+levels(data$Droitier_Gaucher) <- c("Gaucher", "Droitier")
+levels(data$Education) <- c("Licence", "Primaire", "Doctorat", "Master", "Primaire", "Collège/Lycée")
+levels(data$Enfant_unique) <- c("Non", "Oui")
+levels(data$Village_Ville) <- c("Ville", "Village")
+levels(data$Maison_Appartement) <- c("Appartement", "Maison")
+```
+
+```{r headhtml, eval=knitr::is_html_output(), echo=FALSE}
+head(data)%>%
+  kable()%>%
+  kable_styling(bootstrap_options = c("bordered", "striped"))%>%
+  scroll_box(width ="100%")
+
+```
+
+On vérifie le nombre de données manquantes dans la base de données, on remarque qu'il y en a beaucoup.
+Comme on peut le voir ici, **il y a `r sum(is.na(data))` données manquantes**, de plus certaines cellules sont vides, on les recode en NA. Leur nombre étant important, il sera peut-être nécessaire de les supprimer pour l'étude descriptive.
+
+```{r dataNA}
+dataNA <- na.omit(data) # Base de données sans les NA
+```
+
+On récupère alors **`r nrow(dataNA)`** sur **`r nrow(data)`** observations.
+
+## Statistiques descriptives
+
+### Valeurs statistiques
+
+La plupart de nos variables sont codées de 1 à 5, il ne serait pas pertinent de chercher toutes les statistiques pour celles-ci. Les moyennes et écarts-types nous suffiront. Ce ne sera pas le cas pour certaines variables démographiques
+
+
+```{r demoNA/musicNA}
+demoNA <- dataNA[20:29]
+musicNA <- dataNA[1:19]
+```
+
+```{r summary musicNA}
+summary(musicNA)[c(3,4),]%>%
+  kable()%>%
+kable_styling(bootstrap_options = c("bordered", "striped", "hoover"))%>%
+  scroll_box(width = "100%")
+
+```
+Ce premier tableau montre les moyennes et les médianes pour les variables codées de 1 à 5 et correspondant aux préférences musicales des répondants.
+
+### Graphiques de répartition des répondants
+
+Quelques graphiques concernant les répartitions de la population en terme démographiques. Même si certaines variables ne seraient pas pertinentes concernant la musique, il est important d'observer la répartition des répondants.
+
+```{r repartion des répondants}
+
+
+graph1 <- demoNA%>%
+  ggplot()+
+  aes(Age)+
+  geom_bar(fill = colBar1, color = "white", alpha = 0.7)+
+  labs(y = "Effectif", x = "Âge")+
+  theme_minimal()
+
+graph2 <- demoNA%>%
+  ggplot()+
+  aes(Taille, xmin = 140)+
+  geom_histogram(fill = colBar2, color = "white", alpha = 0.7)+
+  labs(y = "Effectif")+
+  theme_minimal()
+
+graph3 <- demoNA%>%
+  ggplot()+
+  aes(Poids)+
+  geom_histogram(fill = colBar3, color = "white", alpha = 0.6)+
+  xlim(40, 100)+
+  labs(y = "Effectif")+
+  theme_minimal()
+
+graph4 <- demoNA%>%
+  ggplot()+
+  aes(Droitier_Gaucher)+
+  geom_bar(fill = c(colG, colD), color = "white", alpha = 0.6)+
+  labs(y = "Effectif", x = "Main principale")+
+  theme_minimal()
+
+graph5 <- demoNA%>%
+  ggplot()+
+  aes(Genre)+
+  geom_bar(fill = c(colF, colH), color = "white", alpha = 0.7)+
+  labs(y = "Effectif")+
+  theme_minimal()
+```
+
+```{r affich graph demoNA}
+ggdraw() +
+  draw_plot(graph3, x = 0, y = .5, width = .5, height = .5) +
+  draw_plot(graph2, x = .5, y = .5, width = .5, height = .5) +
+  draw_plot(graph1, x = 0, y = 0, width = 1, height = 0.5) +
+  draw_plot_label(size = 15,label = c("", "", ""),x = c(0, 0.5, 0), y = c(1, 1, 0.5))
+```
+
+Ces trois premiers graphiques concernent l'âge, le poids et la taille.
+Concernant le poids, une valeur extrême de *150kg* que nous avons choisi de ne pas représenter aussi pour une question d'échelle. Pour l'âge, on observe une majorité de jeunes entre *18/22 ans*.
+
+```{r affich2 graph demoNA }
+ggarrange(graph4, graph5)
+```
+
+Ces deux graphiques concernent les répartitions en genre des répondants et de leur manualité. Concernant cette dernière, la répartition semblent assez proche de la réalité avec une minorité de *gaucher*. Pour les genres, l'égalité n'est pas parfaitement respectée, mais cela ne devrait par être gênant pour la suite de l'étude.
+
+```{r graph demoNA}
+graph6 <- demoNA%>%
+  ggplot()+
+  aes(Education)+
+  geom_bar(fill = c("#73B1B1","#7392B1", "#7373B1", "#B173B1", "#B17392"), color ="white", alpha = 0.7)+
+  labs(y = "Effectif")+
+  theme_minimal()
+
+graph7 <- demoNA%>%
+  ggplot()+
+  aes(Village_Ville)+
+  geom_bar(fill = c("#73B1B1", "#B173B1"), color = "white", alpha = 0.7)+
+  labs(y = "Effectif", x = "Lieu d'habitation")+
+  theme_minimal()
+
+graph8 <- demoNA%>%
+  ggplot()+
+  aes(Maison_Appartement)+
+  geom_bar(fill = c("#7392B1", "#B173B1"), color = "white", alpha = 0.7)+
+  labs(y = "Effectif", x = "Type d'habitation")+
+  theme_minimal()
+```
+
+```{r affich3 graph demoNA}
+ggdraw()+
+  draw_plot(graph8, x = 0, y = .5, width = .5, height = .5) +
+  draw_plot(graph7, x = .5, y = .5, width = .5, height = .5) +
+  draw_plot(graph6, x = 0, y = 0, width = 1, height = 0.5) +
+  draw_plot_label(size = 15,label = c("", "", ""),x = c(0, 0.5, 0), y = c(1, 1, 0.5))
+```
+
+Ici, on peut observer les conditions d'enfance du répondants et son degré d'éducation lors de l'enquête. Une majorité ont grandi en ville, expliquant aussi la majorité concernant les appartements, les deux étant probablement corrélés.</br>
+Pour l'éducation, une majorité sont au collège/lycée, on observait cependant deux valeurs similaires *Primaire* et *Actuellement en primaire* que nous avons donc unifiées.
+
+```{r graph demoNA2}
+graph9 <- demoNA%>%
+  ggplot()+
+  aes(Frere_Soeurs)+
+  geom_bar(fill = c(col1, col2, col3, col4, col5, colH, colF),color = "white", alpha = 0.7)+
+  labs(y = "Effectif")+
+  xlim(-1,6)+
+  theme_minimal()
+
+graph10 <- demoNA%>%
+  ggplot()+
+  aes(Enfant_unique)+
+  geom_bar(fill = c("#7392B1", "#B173B1"), color = "white", alpha = 0.7)+
+  labs(y = "Effectif")+
+  theme_minimal()
+```
+
+```{r aficch 4 graph demoNA}
+ggarrange(graph9, graph10)
+```
+
+Enfin, concernant le milieu fraternel des répondants, on observe une majorité avec des frères ou sœurs. La répartition du nombre lui est assez proche de la réalité, on peut l'approximer par une loi normale de par le nombre d'observations.</br>
+Il est important de noter que certains enfant unique ont répondu avoir des frères et sœurs dans les nombres, et inversement. On peut soit les omettre de la base données, soit considérer que ce sont des demi-frères ou demi-sœurs et les garder. C'est cette dernière option que nous avons choisie.
+
+### Graphiques de répatition des réponses à l'enquête
+
+```{r graph musicNA}
+col12345 <- c(col1, col2, col3, col4, col5)
+
+graph11 <- musicNA%>%
+  ggplot()+
+  aes(Musique)+
+  geom_bar(fill = col12345, color = "white", alpha = 0.8)+
+  labs(y = "Effectif", x = "Goût pour la musique")+
+  theme_minimal()
+
+graph12 <- musicNA%>%
+  ggplot()+
+  aes(Rythme)+
+  geom_bar(fill = col12345, color = "white", alpha = 0.8)+
+  labs(y = "Effectif", x = "Préférence pour le rythme (plus lent au plus rapide)")+
+  theme_minimal()
+
+graph13 <- musicNA%>%
+  ggplot()+
+  aes(Dance)+
+  geom_bar(fill = col12345, color = "white", alpha = 0.8)+
+  labs(y = "Effectif", x = "Goût pour la dance")+
+  theme_minimal()
+
+graph14 <- musicNA%>%
+  ggplot()+
+  aes(Folk)+
+  geom_bar(fill = col12345, color = "white", alpha = 0.8)+
+  labs(y = "Effectif", x = "Goût pour la folk")+
+  theme_minimal()
+
+graph15 <- musicNA%>%
+  ggplot()+
+  aes(Country)+
+  geom_bar(fill = col12345, color = "white", alpha = 0.8)+
+  labs(y = "Effectif", x = "Goût pour la country")+
+  theme_minimal()
+
+graph16 <- musicNA%>%
+  ggplot()+
+  aes(Classique)+
+  geom_bar(fill = col12345, color = "white", alpha = 0.8)+
+  labs(y = "Effectif", x = "Goût pour le classique")+
+  theme_minimal()
+
+graph17 <- musicNA%>%
+  ggplot()+
+  aes(Instrumental)+
+  geom_bar(fill = col12345, color = "white", alpha = 0.8)+
+  labs(y = "Effectif", x = "Goût pour l'instrumentale")+
+  theme_minimal()
+
+graph18 <- musicNA%>%
+  ggplot()+
+  aes(Pop)+
+  geom_bar(fill = col12345, color = "white", alpha = 0.8)+
+  labs(y = "Effectif", x = "Goût pour la pop")+
+  theme_minimal()
+
+graph19 <- musicNA%>%
+  ggplot()+
+  aes(Rock)+
+  geom_bar(fill = col12345, color = "white", alpha = 0.8)+
+  labs(y = "Effectif", x = "Goût pour le Rock")+
+  theme_minimal()
+
+graph20 <- musicNA%>%
+  ggplot()+
+  aes(Metal_Hardrock)+
+  geom_bar(fill = col12345, color = "white", alpha = 0.8)+
+  labs(y = "Effectif", x = "Goût pour le métal")+
+  theme_minimal()
+
+graph21 <- musicNA%>%
+  ggplot()+
+  aes(Punk)+
+  geom_bar(fill = col12345, color = "white", alpha = 0.8)+
+  labs(y = "Effectif", x = "Goût pour le punk")+
+  theme_minimal()
+
+graph22 <- musicNA%>%
+  ggplot()+
+  aes(Hiphop_Rap)+
+  geom_bar(fill = col12345, color = "white", alpha = 0.8)+
+  labs(y = "Effectif", x = "Goût pour le hip-Hop")+
+  theme_minimal()
+
+graph23 <- musicNA%>%
+  ggplot()+
+  aes(Reggea_Ska)+
+  geom_bar(fill = col12345, color = "white", alpha = 0.8)+
+  labs(y = "Effectif", x = "Goût pour le reggae")+
+  theme_minimal()
+
+graph24 <- musicNA%>%
+  ggplot()+
+  aes(Swing_Jazz)+
+  geom_bar(fill = col12345, color = "white", alpha = 0.8)+
+  labs(y = "Effectif", x = "Goût pour le jazz")+
+  theme_minimal()
+
+graph25 <- musicNA%>%
+  ggplot()+
+  aes(Rock_n_Roll)+
+  geom_bar(fill = col12345, color = "white", alpha = 0.8)+
+  labs(y = "Effectif", x = "Goût pour le rock'n'Roll")+
+  theme_minimal()
+
+graph26 <- musicNA%>%
+  ggplot()+
+  aes(Alternative)+
+  geom_bar(fill = col12345, color = "white", alpha = 0.8)+
+  labs(y = "Effectif", x = "Goût pour l'alternative")+
+  theme_minimal()
+
+graph27 <- musicNA%>%
+  ggplot()+
+  aes(Latino)+
+  geom_bar(fill = col12345, color = "white", alpha = 0.8)+
+  labs(y = "Effectif", x = "Goût pour la musique latine")+
+  theme_minimal()
+
+graph28 <- musicNA%>%
+  ggplot()+
+  aes(Techno_Trance)+
+  geom_bar(fill = col12345, color = "white", alpha = 0.8)+
+  labs(y = "Effectif", x = "Goût pour la techno")+
+  theme_minimal()
+
+graph29 <- musicNA%>%
+  ggplot()+
+  aes(Opera)+
+  geom_bar(fill = col12345, color = "white", alpha = 0.8)+
+  labs(y = "Effectif", x = "Goût pour l'opera")+
+  theme_minimal()
+```
+
+#### Généralités
+
+```{r graph géné}
+ggarrange(graph11, graph12)
+```
+
+Ces deux premiers graphiques montrent le goût pour la musique et pour le rythme de 1 à 5. </br>
+Pour la musique, les valeurs correspondent à un degré d'appréciation.
+Quant au rythme, 1 signifie *lent* et 5 *rapide*.
+Ainsi, on observe qu'une très large majorité des répondants apprécie la musique fortement, et qu'une petite partie l'apprécie de façon plus modérée. Très peu n'aiment pas ça : `r sum(musicNA$Musique==1, musicNA$Musique==2)` répondants. </br>
+Pour le rythme c'est différent, une majorité répond **3**, que l'on peut interpréter comme un rythme d'environ **100 à 120 bpm** ce qui regroupe une grande majorité des musiques et des styles.
+
+#### Musiques modernes
+
+```{r graph modernes}
+ggarrange(graph13, graph17, graph18 ,graph22, graph26, graph28)
+```
+
+On a choisi ici le terme musiques modernes de par le caractère électronique et récent des styles cités. Les répartitions ne dégage rien de particulier, exceptée pour la **Techno/Trance** qui est un style de musique particulier avec des rythmes rapides pouvant expliqués la majorité de **1**.
+
+#### Musiques standards
+
+```{r graph standards}
+ggarrange(graph14, graph15, graph19, graph25, graph16)
+```
+
+Pour les musiques standards, nous avons sélectionné des styles de musiques connus par tous. </br>
+Comme on aurait pu l'imaginer, la **folk** et la **country** n'ont pas l'air de rencontrer un franc succès auprès des jeunes. En revanche, le **rock** lui est assez apprécié.</br>
+Pour le **classique** et le **rock'n'roll**, les répartitions sont similaires, et semblent dégager une préférence neutre de par la majorité de **3**.
+
+#### Musiques plus rares
+
+```{r graph rares}
+ggarrange(graph29, graph27, graph24, graph23, graph21, graph20)
+```
+
+On parle ici de styles un peu plus rares, plus "nichés", en particulier auprès d'une population de jeunes personnes. Cela est renforcé par les graphiques.</br>
+Pour l'**opéra**, le **punk** et le **métal**, la valeur **1** est majoritaire, montrant une non-appréciation majeure de ces styles. </br>
+Pour la **musique latine**, le **jazz** et le **reggae**, les avis sont plus neutres et même équilibrés concernant la **musique latine**.
+
+### Les corrélations
+
+Ils semblent important de montrer si quelques corrélations existent entre les styles de musique, et peut-être aussi avec certaines variables démographiques.
+
+```{r corr musicNA}
+
+corrmusicNA <- cor(musicNA)
+```
+
+```{r corrplot}
+
+matcormusicNA <- cor_pmat(corrmusicNA)
+ggcorrplot(corrmusicNA,
+           type = "lower",
+           ggtheme = ggplot2::theme_minimal(),
+           hc.order = T,
+           p.mat = matcormusicNA,
+           sig.level = 0.05,
+           colors = c("#16A721", "white", "#C30202"),
+           lab = T,
+           title = "Corrélation entre les styles de musique",
+           lab_size = 2.5,
+           insig = "blank")
+```
+
+Ce graphique permet d'observer un certains nombres de choses intéressantes, et ne sont affichés dans ce graphiques que les corrélations dont la p-value est inférieure au seuil de **0.05**. On voit plusieurs corrélations au moins supérieur à **0.5** ou plus. </br>
+Par exemple, entre **classique** et **opéra**, le coefficient est de **`r round(cor(musicNA$Classique, musicNA$Opera), 2)`**, cela paraît en effet logique, les deux styles étant assez proches.</br>
+Il en est de même pour le **punk** et le **métal**, avec un coefficient de **`r round(cor(musicNA$Metal_Hardrock, musicNA$Punk), 2)`**, même si celui-ci est peu plus faible.</br>
+On observe aussi quelques coefficients négatifs, comme entre la **pop** et le **métal**.
+
+# **ACP**
+
+Nous allons construire une ACP à partir des données recueillies sur les différents styles de musiques.
+L'analyse par composantes principales permet de représenter en un minimum d'axes (dimensions) un jeu de données de manière à conserver un maximum d'inertie entre les individus. Les axes ainsi créés se nomment composantes principales. 
+
+Le but étant de synthétiser l'information et de mettre en lumière la structures des données.
+
+Tout d'abord nous commençons par nous occuper des données manquantes.
+Il n'est pas possible de les supprimer car nous perdrions trop d'informations.
+C'est pourquoi nous choisissons de les imputer avec la commande `imputePCA` qui estime les valeurs manquantes à l'aide d'itérations d'ACP.
+
+```{r dataACP}
+dataACP <- data[1:19]
+
+nb <- estim_ncpPCA(dataACP, ncp.max = 5) # nombre de composantes pour l'imputation
+
+dataACPImp <- imputePCA(dataACP, ncp = nb$ncp) # imputation des NA
+
+resACP <- PCA(dataACPImp$completeObs, graph = F)
+
+```
+
+## Inertie aux axes
+
+```{r ACP screeplot}
+fviz_screeplot(resACP,
+               barfill = "#425B8A",
+               barcolor = "white",
+               ncp = 15,
+               ylab = "Pourcentage de variance expliquée",
+               ylim = c(0, 22),
+               addlabels = T,
+               title = "Diagrammes des inerties")
+```
+
+Ce graphique représente les inerties cumulées pour chaque dimension. La cassure dans la courbe (le coude) est nette, on peut alors sélectionner ici les 3 ou 4 premiers axes, qui explique **51.4%** de la variance.
+
+## Nuage des variables sur l'axe 1 et 2 
+
+```{r ACP var graph}
+fviz_pca_var(resACP, col.var = "contrib", axes = c(1,2),
+             gradient.cols = c("#C0C8D8","#8192B1","#425B8A" ,"#032463"))
+``` 
+
+Nous observons tout d'abord des effets taille sur l'axe 1 et 2 : les variables se rassemble en formant un cône sur chaque axe. La corrélation des variables est ainsi positive aux axes.
+
+## Tableau regroupant inerties, contributions et qualités de représentation à l'axe 1 et 2 
+
+
+```{r tab var ACP}
+ContribVar <- round(resACP$var$contrib[,1:2],3)
+QualF1V <- round(resACP$var$cos2[,1], 3)
+QualF2V <- round(resACP$var$cos2[,2], 3)
+QualF1F2V <- QualF1V + QualF2V
+CoordVar <- round(resACP$var$coord[,1:2],3)
+
+tabACP <- cbind(CoordVar, ContribVar, QualF1V, QualF2V, QualF1F2V)
+
+colnames(tabACP) <- c("F1", "F2", "ContribF1", "ContribF2", "QualF1", "QualF2", "QualF1F2")
+
+datatable(tabACP)
+```
+
+#### Axe 1
+`Rock_n_Roll` est très proche de l'axe 1 (le cos² sur l'axe 1 est grand) et éloigné du barycentre (proche du cercle de corrélation) donc `Rock_n_Roll` est très bien représenté sur l'axe 1 et sa contribution doit être bonne.
+
+Les principales variables contribuant à l'axe 1 avec une bonne qualité de représentation sont :
+
+- `Rock_n_Roll`
+- `Classique`
+- `Swing-Jazz`
+- `Rock`
+- `Alternative`
+- `Opera`
+- `Metal Hard_Rock`
+
+#### Axe 2 
+
+Dans le même esprit, l'axe 2 forme un effet taille avec des variables bien représentées et contribuant bien à l'axe.
+
+Les principales variables contribuant à l'axe 2 avec une bonne qualité de représentation sont :
+
+- `Dance`
+- `Latino`
+- `Pop`
+- `HipHop_Rap`
+- `Instrumental`
+
+#### Interprétation 
+
+En vu de la construction des axes, le premier plan semble distinguer les musiques de type "récente", peut-être plus appréciés par une population jeune, et une musique plus "ancienne" avec pour chaque style une histoire, des valeurs, regroupant des passionnés.
+
+Afin de vérifier notre hypothèse nous allons étudier le nuage des individus.
+
+## Nuage des individus distingués selon leur appréciation du Rock_n_Roll sur l'axe 1 et 2
+
+```{r graph ind ACP RnR}
+a<-as.data.frame(dataACPImp$completeObs)
+b<-round(a,0)
+groups <- as.factor(b$Rock_n_Roll)
+
+fviz_pca_ind(resACP,
+             col.ind = groups, # colorer par groupes
+             palette = c("#E2C376", "#F1B319","#030200","#8276E2","#2F2488"),
+             addEllipses = TRUE, # Ellipses de concentrations
+             ellipse.type = "euclid",
+             legend.title = "Groups",
+             geom = "point",
+             repel = TRUE)
+
+```
+
+Voici le nuage des individus. Chaque individu est colorié selon son appréciation à la musique `Rock_n_Roll` de `1 à 5`.
+
+Nous avons placé des ellipses qui se centrent selon la `Distance euclidienne au barycentre`.
+
+On remarque bien ici que l'échelle d'appréciation est répartie tout au long de l'axe 1. 
+À gauche, nous retrouvons des individus qui n'aime pas le `Rock_n_Roll` et à droite ceux qui l'apprécie.
+Quant au barycentre, on y retrouve les individus qui sont plutôt indifférents.
+
+## Nuage des individus distingués par leur appréciation à la Dance sur l'axe 1 et 2
+
+
+```{r graph ind dance ACP}
+groups <- as.factor(b$Dance)
+
+fviz_pca_ind(resACP,
+             col.ind = groups, # colorer par groupes
+             palette = c("#E2C376", "#F1B319","#030200","#8276E2","#2F2488"),
+             addEllipses = TRUE, # Ellipses de concentrations
+             ellipse.type = "euclid",
+             legend.title = "Groups",
+             geom = "point",
+             repel = TRUE
+             )
+
+```
+
+Même réflexion pour l'axe 2, on retrouve bien ces niveaux d'appréciation tout au long de l'axe allant de *n'aime pas* (en bas) à *adore* (en haut).
+
+## Nuage des individus distingués par leur appréciation à la musique en général sur l'axe 1 et 2 
+
+```{r graph ind ACP music}
+groups <- as.factor(b$Musique)
+
+fviz_pca_ind(resACP,
+             col.ind = groups, # colorer par groupes
+             palette = c("#E2C376", "#F1B319","#030200","#8276E2","#2F2488"),
+             addEllipses = TRUE, # Ellipses
+             ellipse.type = "euclid",
+             legend.title = "Groups",
+             geom = "point",
+             repel = TRUE
+             )
+```
+
+L'idée ici est de déterminer quels sont les individus qui se situent dans le quart gauche inférieur.
+De manière logique, on peut imaginer un axe fictif à la diagonale de l'axe 1 et 2 (d'en bas à gauche à en haut à droite) stipulant l'appréciation à la musique.
+Nous remarquons que de manière général les individus adorent la musique. (l'ellipse pour la note de 5 construite à partir des distances moyennes au barycentre est superposée au profil moyen).
+
+En quelque sorte, les personnes qui apprécient les deux styles de musiques que nous avons différenciés en axe 1 et 2 se retrouvent dans le quart droit supérieur du nuage des individus, on tend à penser qu'ils apprécient plus la musique de manière générale et sont donc ouvert à tous styles de musiques.
+
+Un moyen de vérifier cette interprétation de l'étude est de faire une classification et d'en étudier les classes, que nous effectuerons plus loin.
+
+```{r graph var contrib ACP}
+groupe<-resACP$var$contrib[,1]
+
+fviz_pca(resACP,
+         col.var = groupe,
+         gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+         geom = "point",
+         repel = TRUE,
+             ) +
+        ggtitle("Nuage des individus et des variables")
+```
+
+Nous avons représenté ici le nuage des variables et des individus, nous avons pris soint de colorier les varaibles selon leur contribution à l'axe 1.
+Nous voyons bien que deux groupes de musiques se distinguent.
+
+## Axe 3 et 4 
+
+Nous nous intéressons maintenant au deuxième plan. 
+
+```{r graph var contrib ACP 3/4}
+fviz_pca_var(resACP, col.var = "contrib", axes = c(3,4),
+             gradient.cols = c("#C0C8D8","#8192B1","#425B8A" ,"#032463")
+             )
+```
+
+
+```{r tab contrib 3/4 ACP}
+ContribVar <- round(resACP$var$contrib[,3:4],3)
+QualF3V <- round(resACP$var$cos2[,3], 3)
+QualF4V <- round(resACP$var$cos2[,4], 3)
+QualF3F4V <- QualF3V + QualF4V
+CoordVar <- round(resACP$var$coord[,3:4],3)
+
+tab4 <- cbind(CoordVar, ContribVar, QualF3V, QualF4V, QualF3F4V)
+
+colnames(tab4) <- c("F3", "F4", "ContribF3", "ContribF4", "QualF3", "QualF4", "QualF3F4")
+
+datatable(tab4)
+```
+
+#### Axe 3
+
+En regardant les contributions on remarque que les variables qui contribuent le plus à l'axe 3 sont : 
+
+- `Rythme (11,2%)`
+- `Reggea_ska (11%)`
+- `Punk (10,6%)`
+- `HipHop_Rap (10,3%)`
+- `Opera (8,77%)`
+
+On observe sur le nuage des variables que les 4 premières à contribuer à l'axe 3 s'opposent à `Opera`.
+
+De manière générale, on observe sur l'axe 3 une opposition entre les musiques plus *acoustique* écoutées par une population plus attirée par les musiques douces avec des rythmes très variants et un emploi des instruments brut (`Opera`, `Classique`, `Instrumental`), et les musiques où le rythmes est très défini tout au long du morceau et où les sons des instruments sont assez travaillés et modifiés (`Reggea_ska`,`HipHop_Rap`,`Punk`).
+
+#### Axe 4
+
+Les variables qui contribuent le plus à l'axe 4 sont : 
+
+- `Reggea_ska (21%)` 
+- `Techno_Trance (16,4%)` 
+- `Swing_Jazz (7%)` 
+- `Opera (5,7%)` 
+
+On voit sur le nuage des variables que `Reggea_ska` et `Swing_Jazz` sont opposés sur l'axe 4 à `Techno_Trance` et `Rythme`. Ici l'axe 4 oppose clairement les musiques avec un rythme lent et un rythme rapide. 
+On s'attend à ce que la contribution de la variable `Rythme` soit la plus forte sur ce plan puisqu'elle semble diriger notre interprétation des axes.
+
+## Contribution des variables au plan 
+```{r contrib ACP 3/4}
+contri<-cbind(sort(resACP$var$contrib[,3]+resACP$var$contrib[,4],decreasing = TRUE))
+
+contri%>%
+  kable()%>%
+  kable_styling(bootstrap_options = c("bordered", "striped", "hoover"))%>%
+  scroll_box(height = "400px")
+```
+
+On observe que les deux variables qui contribuent le plus au plan sont `Reggea_ska`, réputé pour la lenteur du rythme, et `Rythme`, qui nous le rappelons lesquelles s'opposent sur l'axe 4. L'axe 4 représente une échelle de rythme allant de lent à rapide.
+
+
+## Conclusion 
+
+Tout d'abord, le premier plan de l'ACP distingue deux styles de musiques : un plus apprécié par les jeunes (axe 2) et une autre regroupant de nombreux passionnés qui sont des musiques plus anciennes, historiques(axe 1). 
+
+- **Axe 1** : échelle d'appréciation pour les musiques historiques, moins récentes.
+- **Axe 2** : échelle d'appréciation pour des musiques récentes, avec moins d'histoires, voir même à effets de mode.
+
+
+Concernant le deuxième plan, celui-ce caractérise le rythme et la construction des musiques.
+
+- **Axe 3** : oppose les musiques acoustiques, assez brutes instrumentalisent et plutôt douces, aux musiques dont les sons sont très travaillés, modifiés, voir de synthèses. 
+- **Axe 4** : échelle rythmique allant de lent à rapide. 
+
+
+## Classification de l'ACP
+
+### Par les K-means
+
+```{r nb clust ACP}
+gap_stat <- cluster::clusGap(dataACPImp$completeObs, FUNcluster = kmeans, K.max = 8)
+```
+
+Tout d'abord, on détermine le nombre de partition optimale à l'aide de la fonction `clusGap`, qui nous donne la valeur optimale de classe à l'aide du *gap statistic*, qui trouve le nombre maximisant l'écart dans la variance intra-groupes en introduisant un nouveau centroïde pour plusieurs itérations.
+
+```{r graph Nb clust ACP}
+fviz_gap_stat(gap_stat)
+```
+
+On voit sur ce graphiques que le nombre optimal de classe calculé est 3. Ainsi, on précise dans la fonction des `kmeans` que l'on désire 3 clusters. De plus, on utilise ici la méthode `Forgy` qui définit les 3 premiers centres de façon aléatoire, et on répète l'algorithme **50** fois pour obtenir un meilleur partitionnement. 
+
+```{r kmeans ACP}
+km <- kmeans(dataACPImp$completeObs, centers = 3, nstart = 50, algorithm = "Forgy")
+```
+
+```{r graph Kmeans ACP}
+fviz_cluster(km, dataACPImp$completeObs, geom = "point", main = "Classes selon les K-means")+
+  ggplot2::theme_minimal()
+
+```
+
+Ici donc les 3 clusters que les K-means nous ont donné.
+
+Ceux-ci expliquent `r round(km$betweenss*100/km$totss, 3)`% de l'inertie.
+
+On peut observer que le découpage en 3 classes confirme l'analyse en ACP à savoir :
+
+- **Classe 1** : Population ayant une préférence pour les musiques "anciennes".
+- **Classe 2** : Population ayant une préférence pour les musiques "récentes".
+- **Classe 3** : Population étant plutôt indifférent aux styles de musique mais l'appréciant dans se généralité ou ne l'aimant pas (proportiton faible vu en ACP).
+
+### Par la CAH
+
+Nous allons effectuer une classification ascendante hiérarchique (méthode de WARD) à partir des résultat de l'ACP.
+
+```{r CAH ACP}
+CAH1 <- HCPC(resACP, graph = F, consol = T)
+```
+
+```{r dendog ACP}
+fviz_dend(CAH1, show_labels = F, main = "Dendogramme sur l'ACP")
+```
+
+Ci-dessus, on présente le dendogramme correspondant à cette classification. On a laissé R choisir automatiquement le nombre de classes, et il en dégage 3 groupes, tout comme la méthode des K-means.
+De plus, on précise que notre CAH a été consolidé par les `k-means`, et nous donne un gain d'inertie de **`r CAH1$call$bw.after.consol-CAH1$call$bw.before.consol`%**.
+
+```{r graph CAH ACP}
+fviz_cluster(CAH1, data = dataACPImp$completeObs, geom = "point", main = "Classes selon la CAH (méthode de Ward)")+
+  ggplot2::theme_minimal()
+```
+
+Enfin, le graphique représentant les classes générées par la CAH. Nous remarquons que le découpage des clusters n'est pas tout à fait le même qu'avec les `K-means`. Nous allons étudier les clusters ci-dessous grâce aux tableaux des statistiques.
+
+#### Description de la classe 1 de la CAH
+
+```{r CAH ACP Var clust1}
+CAH1$desc.var$quanti$`1`%>%
+  kable()%>%
+  kable_styling()%>%
+  scroll_box(height = "500px")
+```
+
+Ci-dessus, le tableau montrant les statistiques des variables dans le cluster 1. Ce tableau nous permet de comparer la moyenne dans le cluster à la moyenne générale pour chaque variables. 
+
+Le **cluster 1**, d'après son positionnement sur le premier plan de l'ACP et les statistiques, regroupe les personnes appréciant les musiques "récentes" et aimant moins les musiques "anciennes". On observe en effet dans la tableau que la moyenne d'appréciation dans la classe pour les variables `Hip-Hop/Rap`, `Dance` et `Pop` est beaucoup plus importantes que la moyenne général.
+De plus, c'est l'inverse que l'on observe avec des moyennes beaucoup plus faibles qu'en général sur les variables `Rock_n_Roll`, `Rock` et `Classique`. 
+
+Cela confirme l'interprétation que nous avions faite en ACP. 
+
+
+
+#### Description de la classe 2
+
+```{r CAH ACP Var clust2}
+CAH1$desc.var$quanti$`2`%>%
+  kable()%>%
+  kable_styling()%>%
+  scroll_box(height = "500px")
+```
+
+Concernant le cluster 2, en appliquant la même méthode, hormis quelques variables (`Latino` et `Instrumentale`) les moyennes du cluster sont très similaires aux moyennes générales. Nous retrouvons bien nos individus qui apprécient la musique de manière générale.
+
+#### Description de la classe 3
+
+```{r CAH ACP Var clust3}
+CAH1$desc.var$quanti$`3`%>%
+  kable()%>%
+  kable_styling()%>%
+  scroll_box(height = "500px")
+```
+ 
+Toujours avec le même raisonnement, le **cluster 3**, lui, va à l'inverse du cluster 1, et regroupe les individus préférant les musiques "anciennes" aux musiques "récentes", similairement à ce que nous avions estimé durant l'ACP.
+
+## Conclusion générale
+
+L'ACP et les différentes méthodes de classification nous montrent une séparation nette entre les groupes. L'inertie inter-groupes se résume principalement dans les goûts musicaux, et plus particulièrement par l'ouverture globale à la musique des individus.
+De plus, elle nous révèle que les principales différences entre les individus se résument à leur préférence en terme de style musical et ce qui les composent en terme de caractéristiques (rythme, instruments, travail sonore). La classification a permis d'appuyer notre hypothèse en rangeant les individus dans des groupes expliqués par les axes.
+Nous avons de plus choisi de ne pas représenter les clusters sur les axes 3 et 4, car les deux axes sont tirés fortement par le `rythme`, empêchant une différenciation claire des groupes.
+
+# **AFC** 
+
+Nous nous demandons si les groupes en ACP sont déterminés plus précisément par une caractéristiques individuelles comme l'âge ou l'éducation par exemple.
+
+## AFC sur la musique classique et l'éducation.
+
+```{r tab cont AFC class/edu}
+ContAFC<-table(data$Education,data$Classique)
+colnames(ContAFC)<-c("Déteste","N'aime Pas","Indifférent","Apprécie","Adore")
+```
+
+```{r rep tab cont AFC class/edu, title = "Tableau de contingence musique classique/éducation"}
+ContAFC%>%
+  kable()%>%
+  kable_styling(bootstrap_options = c("bordered", "striped", "hoover"))
+```
+
+Ici est présenté le tableau de contingence qui croise les variables `Education` et les modalités de la variable concernant la musique `Classique`.
+
+Nous avons renommé les modalités de `1 à 5` en niveaux d'appréciation classiquement utilisés dans les enquêtes.
+
+### Test du khi²
+
+```{r khi² AFC class/edu}
+khitAFC <- chisq.test(ContAFC)
+```
+
+On effectue tout d'abord un test du Chi² pour vérifier la pertinence d'effectuer une AFC ici. 
+Le test nous retourne une p-value de **`r khitAFC$p.value`**. On peut alors rejeter l'hypothèse d'indépendance. Cependant, on obtient un avertissement concernant les valeurs et qu'ainsi l'approximation peut être incorrecte.
+
+On peut utiliser `simulate.p.value = TRUE` pour simuler des valeurs de p-value par itération et appuyer notre premier résultat.
+
+```{r khi ² AFC simul p class/edu}
+khitAFCSimul <- chisq.test(ContAFC, simulate.p.value = TRUE)
+```
+
+La p-value est de **`r khitAFCSimul$p.value`**. On rejette donc toujours l'hypothèse d'indépendance.
+
+
+On peut donc effectuer l'AFC.
+
+```{r AFC class/edu}
+resAFC <- CA(ContAFC,graph=F)
+```
+
+### Inertie aux axes
+
+```{r screeplot AFC class/edu}
+fviz_screeplot(resAFC,
+               addlabels = T,
+               barfill = "#82B6C5",
+               barcolor = "white",
+               ylab = "Pourcentage de variance expliquée")
+```
+
+On remarque que l'information totale est résumée en 4 axes, ce qui est peu étonnant au vu de la faible quantité de cellules de notre tableau de contingence (5 profils colonnes, 5 profils lignes).
+
+Le premier axe conserve à lui seul **80,5%** d'inertie, cela signifie que **80,5%** de la distance au Khi² est expliqué par le premier axe. Nous avons également **11,80%** d'inertie au second ce qui nous donne une inertie au premier plan factoriel de **92,3%**. 
+
+Nous nous limiterons à interpréter l'AFC sur ces deux axes.
+
+### Regardons les profils lignes 
+
+```{r graph prof ligne AFC class/edu}
+fviz_ca_row(resAFC, geom = "text",
+             alpha.var = 0.75,axes = c(1, 2)) +
+  scale_color_gradient(low = "#A6C582", high = "#CB492F")
+```
+
+De manière générale : 
+
+- La catégorie `Doctorat` est très éloignée du profil moyen, elle semble être aussi bien représentée sur l'axe 1 que sur l'axe 2. Nous avons essayé de ré-effectuer cette AFC en mettant `Doctorat`en variable supplémentaire, mais cela ne changeait pas grand-chose.
+
+- Il semble que l'axe 2 soit tiré par les individus de la catégorie `Licence`.
+
+- La catégorie `Collège/Lycée` est proche du barycentre, donc est proche de l'individu moyen théorique dans la manière d'apprécier la musique classique.
+
+### Observons les contribution et les qualités de représentation des lignes aux axes
+
+```{r}
+ContribRowAFC <- round(resAFC$row$contrib[,1:2],3)
+QualF1RAFC <- round(resAFC$row$cos2[,1], 3)
+QualF2RAFC <- round(resAFC$row$cos2[,2], 3)
+QualF1F2RAFC <- QualF1V + QualF2V
+CoordRowAFC <- round(resAFC$row$coord[,1:2],3)
+
+tabAFCrow <- cbind(CoordRowAFC, ContribRowAFC, QualF1RAFC, QualF2RAFC, QualF1F2RAFC)
+
+colnames(tabAFCrow) <- c("F1", "F2", "ContribF1", "ContribF2", "QualF1", "QualF2", "QualF1F2")
+
+datatable(tabAFCrow)
+```
+
+Pour les contributions, on peut voir dans ce tableau que `Master`, `Primaire` et `Doctorat` contribue au Khi² sur l'axe 1 à hauteur d'environ **85%**
+Pour l'axe 2, son inertie est en grande partie expliquée par le profil ligne `Licence` à hauteur de **55,5%** et `Primaire` y contribue également à hauteur de **26,34%**
+
+Quant aux qualités de représentation, `Doctorat` est effectivement très bien représenté sur l'axe 1 mais il faut s'en méfier car cette catégorie comprend peu d'individus. De plus, nous voyons que globalement les profils lignes sont bien représentés sur l'axe 1 avec une bien meilleure qualité pour `Master` et `Primaire`.
+
+Pour l'axe 2, c'est un peu différent, les qualités sont bien plus faibles. 
+Tout porte à penser que l'axe 1 représente le niveau d'étude.
+On précisera tout de même que `Licence` et `Collège` sont mieux représenté sur l'axe 2 que les autres catégories.
+
+### Regardons les contibutions des profils lignes au premier plan factoriel
+
+```{r contri ligne AFC plan1 class/edu}
+sort(resAFC$row$contrib[,1]+resAFC$row$contrib[,2],decreasing=T)%>%
+  kable(col.names = "Contribution au premier plan")%>%
+  kable_styling(bootstrap_options = c("bordered", "striped", "hoover"))
+```
+
+Nous remarquons que l'inertie total du premier plan factoriel provient en grande partie de `Licence` et `Primaire`.
+
+### Regardons les profils colonnes
+
+```{r graph prof col AFC class/edu}
+fviz_ca_col(resAFC, geom = "text",
+             alpha.var = 0.75,axes = c(1, 2)) +
+  scale_color_gradient(low = "#A6C582", high = "#CB492F")
+```
+
+Le nuage des profils colonnes est intéressant par sa structure, on voit bien que les mesure d'appréciation s'étendent le long de l'axe 1 allant de `Apprécie` à `Déteste`.
+Par ailleurs, ces deux catégories sont très opposées, on s'attend à ce qu'elles contribuent fortement à l'axe 1.
+
+Chose plus étonnante `Adore` se détache et semble être plus représentée sur l'axe 2.
+
+### Observons les contribution aux axes
+
+```{r contri col AFC class/edu}
+ContribColAFC <- round(resAFC$col$contrib[,1:2],3)
+QualF1CAFC <- round(resAFC$col$cos2[,1], 3)
+QualF2CAFC <- round(resAFC$col$cos2[,2], 3)
+QualF1F2CAFC <- QualF1V + QualF2V
+CoordColAFC <- round(resAFC$col$coord[,1:2],3)
+
+tabAFCcol <- cbind(CoordColAFC, ContribColAFC, QualF1CAFC, QualF2CAFC, QualF1F2CAFC)
+
+colnames(tabAFCcol) <- c("F1", "F2", "ContribF1", "ContribF2", "QualF1", "QualF2", "QualF1F2")
+
+datatable(tabAFCcol)
+```
+
+Comme nous l'avions pressenti, la contribution de `Apprécie` est forte à hauteur de **50,73%** et `Déteste` à hauteur de **26,19%**. 
+
+Les autres modalités contribuent beaucoup moins.
+
+Comme observé, la contribution de la modalité `Adore` à l'axe 2 est très importante : **77,2%**.
+A l'opposé, on a la modalité `N'aime pas` qui y contribue à hauteur de **19%**. 
+
+Pour les représentations, `Apprécie` est très bien représenté sur l'axe 1 à 'l'instar de `Déteste` et `N'aime pas`.
+Pour l'axe 2, les qualités de représentation sont plutôt médiocres, hormis pour `Adore` avec **76%**
+
+### Conclusion
+
+```{r prof lignes/col class/edu}
+fviz_ca(resAFC, geom = "text",
+             col.var="cos2",
+             alpha.var = 0.75) +
+  scale_color_gradient(low = "#A6C582", high = "#CB492F")
+```
+
+On remarque que le profil `Collège/lycée` est assez proche du profil moyen avec un goût pour le classique plutôt neutre.
+Les étudiants en `Licence` quant à eux semblent se détacher de la même manière que la modalité `Adore`.
+Les `Primaires` semblent ne pas vraiment apprécier la musique classique.
+En `Master`, l'avis semblent de manière général tendre vers `Apprécie`.
+
+Ainsi, on peut supposer que l'appréciation au classique est plus forte chez les étudiants en étude supérieur (licence et plus). A considérer que `Doctorat` est mal représenté dans la population et ne définit donc pas une généralité concernant ce niveau d'étude. De plus, il est important de rappeler que, globalement, le niveau d'étude est fortement corrélé avec l'âge, et que celui-ci doit aussi avoir son influence. 
+
+
+## AFC sur l'âge et le hip-hop/rap
+
+Maintenant, nous allons nous intéresser au lien entre l'âge des individus répartis en classe et le style Hip-Hop/Rap. Après de nombreux essais concernant la séparation des classes d'âge, nous avons décider de garder 3 classes d'âge découpé en 5 années chacune. 
+On rappelle que la population étudiée s'étale de 15 à 30 ans. Nous avons remarqué que de multiples classes homogénéisait la population et ne permettait  pas de faire ressortir l'inertie inter-groupes. On s'attend donc à une AFC qui exprime l'inertie en très peu d'axes.
+
+```{r classe age}
+data$Age_cat <- cut(data$Age,
+  include.lowest = FALSE,
+  right = TRUE,
+  dig.lab = 4,
+  breaks = 3)
+
+levels(data$Age_cat) <- c("Entre 15 et 20 ans",
+                         "Entre 20 et 25 ans",
+                         "Entre 25 et 30 ans")
+```
+
+### Tableau de contingence
+
+```{r tab cont AFC rap/age}
+ContAFC1 <- table(data$Age_cat,data$Hiphop_Rap)
+colnames(ContAFC1) <- c("Déteste","N'aime Pas","Indifférent","Apprécie","Adore")
+```
+
+```{r tab cont AFC1, title = 'Tableau de contingence entre les âges et les appréciations concernant le Hip-Hop'}
+ContAFC1%>%
+  kable()%>%
+  kable_styling(bootstrap_options = c("bordered", "striped", "hoover"))
+```
+
+### Test du chi-deux
+
+```{r khi² AFC1 rap/age}
+khitAFC1 <- chisq.test(ContAFC1)
+```
+
+Comme pour l'AFC précédente, on effectue un test du Khi² pour vérifier que notre AFC est valable. Ici, la p-value est de **`r khitAFC1$p.value`**, on rejette alors l'hypothèse d'indépendance et on peut valider notre AFC.
+
+```{r  AFC rap/age}
+resAFC1 <- CA(ContAFC1,graph=F)
+```
+
+### Inerties aux axes 
+
+```{r val propre AFC rap/age}
+resAFC1$eig%>%
+  kable()%>%
+  kable_styling(bootstrap_options = c("bordered", "striped", "hoover"))
+```
+
+On remarque que l'information totale est résumée en 2 axes, ce qui est peu étonnant au vu de la faible quantités de cellules de notre tableau de contingence (5 profils colonnes, 3 profils lignes).
+
+Le premier axe conserve à lui seul **83%**d'inertie, cela signifie que **83%** de la distance au Khi² est expliquée par ce dernier. Nous avons également **17%** d'inertie au second axe.
+Soit comme nous l'avions pensé, l'inertie se résume en très peu d'axes, ici deux.
+
+```{r screeplot AFC rap/age}
+fviz_screeplot(resAFC1,
+               addlabels = T,
+               barfill = "#82B6C5",
+               barcolor = "white",
+               ylab = "Pourcentage de variance expliquée")
+```
+
+Le diagramme des inerties confirme notre analyse.
+
+### Regardons les profils lignes 
+
+```{r prof lignes rap/age}
+fviz_ca_row(resAFC1, geom = "text",
+             alpha.var = 0.75,axes = c(1, 2)) +
+  scale_color_gradient(low = "#A6C582", high = "#CB492F")
+```
+
+Nous voyons que les profils lignes s'éloignent du profil moyen de manière disjointe.
+Effectivement, la catégorie `[20-25]` semble contribuer de manière très forte à l'axe 2. 
+Contrairement aux catégories `[15-20]` et `[25-30]` qui s'opposent sur l'axe 1.
+
+On s'attend donc à ce que l'axe 1 soit formé par les catégories `[15-20]` et `[25-30]`
+Et que l'axe 2 soit formé en grande partie par l'inertie du profil ligne `[20-25]`.
+
+### Observons les contribution et les qualités de représentations des profils lignes aux axes
+
+```{r contri ligne1 rap/age}
+
+ContribRowAFC1 <- round(resAFC1$row$contrib[,1:2],3)
+QualF1RAFC1 <- round(resAFC1$row$cos2[,1], 3)
+QualF2RAFC1 <- round(resAFC1$row$cos2[,2], 3)
+QualF1F2RAFC1 <- QualF1V + QualF2V
+CoordRowAFC1 <- round(resAFC1$row$coord[,1:2],3)
+
+tabAFCrow1 <- cbind(CoordRowAFC1, ContribRowAFC1, QualF1RAFC1, QualF2RAFC1, QualF1F2RAFC1)
+
+colnames(tabAFCrow1) <- c("F1", "F2", "ContribF1", "ContribF2", "QualF1", "QualF2", "QualF1F2")
+
+datatable(tabAFCrow1)
+```
+
+On peut voir que les catégories `[25-30]` et `[15-20]` contribue à l'axe 1 pour plus de **99.9%**. 
+On remarque bien évidement que la classe `[20-25]` ne contribue pas du tout à l'axe 1.
+
+L'axe 2 trouve son inertie en grande partie par le profil ligne `[20-25]` à hauteur de **68,5%** et la modalité `[15-20]` y contribue également à hauteur de **28.5%**. 
+
+
+Pour les qualités de représentation, on s'attendait à ce que la classe `[20-25]` soit très mal représentée sur l'axe 1.
+Cependant comme prévu, les qualités de représentation des modalités `[25-30]` et `[15-20]` sont très bien élevées sur l'axe 1.
+
+Quant à l'axe 2, nous avions remarqué que la classe `[20-25]` était bien représentée sur l'axe 2 et était très éloignée du profil moyen. De ce fait, la qualité de représentation étant le carré de sa coordonnée, elle est très importante.
+
+### Regardons les contibutions des profils lignes au premier plan factorielle
+
+```{r contri plan1 rap/age}
+sort(resAFC1$row$contrib[,1]+resAFC1$row$contrib[,2],decreasing=T)%>%
+  kable()%>%
+  kable_styling(bootstrap_options = c("bordered", "striped", "hoover"))
+```
+
+Nous remarquons que l'inertie totale du premier plan factoriel provient en grande partie des classes `[25-30]` et `[20-25]` qui nous le rappelons expliquent chacune un axe distinct.
+
+### Regardons le nuage de profils colonnes
+
+```{r prof col rap/age}
+fviz_ca_col(resAFC1, geom = "text",
+             alpha.var = 0.75,axes = c(1, 2)) +
+  scale_color_gradient(low = "#A6C582", high = "#CB492F")
+```
+
+Le nuage des profils colonnes se distingue principalement le long des axes, en regardant quels profils colonnes sont proches d'un axe et éloignés du profil moyen, on peut remarquer que l'axe 1 est plutôt porté sur le fait d'aimer ou non le Hip-Hop (de gauche à droite sur l'axe 1 pour les modalités `Apprécie` et `Déteste`).
+
+On voit que le profil `Déteste` semble tiré l'axe 1, il doit beaucoup contribuer.
+
+Inversement avec l'axe 2, qui semble trouver son inertie avec la modalité `Adore` et peut-être `Apprécie`.
+Cela ne sont cependant que des hypothèses à vérifier par la suite.
+
+
+### Qualités de représentations et contributions aux axes des profils colonnes
+
+```{r contri col AFC1 class/edu}
+ContribColAFC1 <- round(resAFC1$col$contrib[,1:2],3)
+QualF1CAFC1 <- round(resAFC1$col$cos2[,1], 3)
+QualF2CAFC1 <- round(resAFC1$col$cos2[,2], 3)
+QualF1F2CAFC1 <- QualF1V + QualF2V
+CoordColAFC1 <- round(resAFC1$col$coord[,1:2],3)
+
+tabAFCcol1 <- cbind(CoordColAFC1, ContribColAFC1, QualF1CAFC1, QualF2CAFC1, QualF1F2CAFC1)
+
+colnames(tabAFCcol1) <- c("F1", "F2", "ContribF1", "ContribF2", "QualF1", "QualF2", "QualF1F2")
+
+datatable(tabAFCcol1)
+```
+
+Comme nous l'avions pressenti, la contribution pour l'axe 1 de `Déteste` est forte à hauteur de **73%** et `Apprécie` à hauteur de **15.3%**. Ainsi, l'hypothèse que nous avions faite au départ semble se confirmer concernant la signification de l'axe 1.
+Les autres modalités sont bien moins représentées.
+
+Pour l'axe 2, comme observé, la contribution à l'inertie de la modalité `Adore` est très importante avec **61,3%**. 
+Le profil colonne `Apprécie` contribue à la distance au Khi² à hauteur de **20%**.
+On note  d'ailleurs que ce profil contribue aux deux axes dans des proportions assez proches.
+
+Quand aux représentation, sur l'axe 1 le profil `Déteste` est très bien représenté avec une valeur de **0.987**, ainsi que `N'aime pas` avec **0.827** et aussi, `Apprécie` et `Indifférent` avec environ **0.77** chacun.
+Sur l'axe 2, les qualités de représentation sont plutôt médiocres hormis pour `Adore` avec **0.99**.
+
+### Conclusion
+
+```{r prof col/ligne AFC rap/age}
+fviz_ca(resAFC1, geom = "text",
+             col.var="cos2",
+             alpha.var = 0.75) +
+  scale_color_gradient(low = "#A6C582", high = "#CB492F")
+```
+
+Globalement, les individus entre **15 et 20 ans** apprécie plutôt le `Hip-Hop/Rap` (qualité de représentation plus élevée que `Indifférent`). Pour les individus entre **25 et 30 ans**, il semblerait que ceux-ci déteste globalement ce style. 
+Et enfin, que ce style soit adoré chez les **20/25 ans**.
+On remarque donc comme la précédente AFC, un lien certain antre l'âge et l'appréciation de certains styles musicaux.
+On peut penser que cela s'explique par les années dans lesquelles sont nées ces individus. En effet, l'étude ayant été fait en 2013, montre que chaque groupe est né et a grandi dans des ères musicales différents.
+
+# **ACM**
+
+Nous allons maintenant effectuer une **ACM** avec les variables suivantes:
+
+ - Toutes les types de musiques en facteur cette fois.
+ - Le genre.
+ - L'éducation.
+ - L'âge en classe similairement à l'AFC.
+
+Similairement à l'ACP, nous avons d'abord imputer la base de données à l'aide de la fonction `imputeMCA` qui estime les valeurs manquantes par une itération d'ACM.
+
+Suite à des différents essais de choix de variables pour l'ACM nous donnant des inerties peu différenciées en axes (pas de cassure), nous avons décidé de conserver les styles de musiques les plus représentatif des clusters dans l'ACP. Effectivement, un gain d'inertie sur les premiers axes est ressenti, et une différenciation drastique des inerties aux dimensions plus lointaines.
+
+```{r data ACM}
+dataACM <- data[, c( 3, 8, 12, 6, 14, 15, 7, 17, 19, 24, 26, 30)]
+
+
+
+dataACM <- as.data.frame(lapply(dataACM, as.factor))
+
+#nbACM <- estim_ncpMCA(dataACM)
+#Très long à exécuter, le résultat est 4
+dataACMImp <- imputeMCA(dataACM, ncp = 4)
+```
+
+```{r ACM}
+resACM <- MCA(dataACMImp$completeObs, quali.sup = c(10, 12), graph = F)
+```
+
+## Diagrammes des inerties relatives aux axes et choix des dimensions
+
+```{r screeplot ACM}
+fviz_screeplot(resACM,
+               addlabels = T,
+               barfill = "#82B6C5",
+               barcolor = "white",
+               ylab = "Pourcentage de variance expliquée",
+               title = "Inertie des dimensions")
+```
+
+Ce premier graphique représente les inerties pour chaque axes factoriels.
+
+On peut alors sélectionner ici les 3/4 premiers axes, qui explique **23.6%** de l'inertie Nous aviserons évidemment en fonction du nombre d'axes que nous arriverons à interpréter.
+
+## Représentation des variables, contributions et qualités
+
+Nous allons d'abord ici regarder la répartition des modalités sur les axes, puis leur contribution et leur qualités.
+```{r graph var ACM x}
+graph_var_x<-fviz_mca_var(resACM, geom = "text",
+                             repel = TRUE,
+                             col.var = "x")+
+  scale_color_gradient(low = "#AFAEDF", high = "#FF2900")+
+  ggtitle("Représentation de la qualité des variables")
+```
+
+#### Nuage des variables 
+
+```{r rep graph var ACM x}
+graph_var_x
+```
+
+
+On remarque plusieurs choses sur ces graphiques. 
+
+Tout d'abord, on peut supposer que l'axe 1 est déterminé par les niveaux d'appréciation, en effet, les valeurs s'étalent de 1 à 5 en allant de gauche à droite.
+
+Quant à l'axe 2, on peut supposer au vu des contributions ci-dessous que celui-ci est dirigé par l'instrumentalisation et les sonorités utilisées dans les musiques, de sonorités naturelles, pures à des sonorités plus artificielles, voir électroniques.
+
+De plus, il est important de noter un effet Guttman au vu de la dispersion des modalités sur les axes 1 et 2. En effet, il doit y avoir un jeu d'interactions entre les deux axes formant ce *U* assez distinct sur le graphique. Ce problème est favorisé lorsque l'analyse porte sur des variables avec un nombre impair de modalités, donc avec une modalité médiane : c'est le cas des échelles de **0 à 5** où la modalité **3 est médiane**
+
+#### Contribution
+
+
+```{r contrib var ACM graph}
+C1var<-fviz_contrib(resACM, choice="var", axes = 1,
+                    top = 30,
+                    horiz = T,
+                    fill = "#6395CF", color = "#6395CF",
+                    ggtheme = theme_classic())+ 
+                    theme(axis.text.x = element_text(size=10),
+                    title = element_text(size=9))
+
+C2var<-fviz_contrib(resACM, choice="var", axes = 2,
+                    fill = "#6395CF", 
+                    color = "#6395CF",
+                    top = 30,
+                    horiz = T,
+                    ggtheme = theme_classic()) + 
+                    theme(axis.text.x = element_text(size=10),
+                    title = element_text(size=10))
+
+C1_varH<-ggpar(C1var,rotate = T)
+C2_varH<-ggpar(C2var,rotate = T)
+
+ggarrange(C1_varH,C2_varH)
+```
+
+Pour l'axe 1, les variables qui contribuent le plus sont celles que nous avons dit plus haut à savoir le `Classique_1`, le `Swing_jazz_1`, l'`Instrumental_1` et aussi le `Opera_1` et pour toutes avec la modalité **1**.
+Cela appuie notre hypothèse de l'axe définit par les appréciations.
+
+Pour l'axe 2, les variables qui contribuent le plus sont la `Classique_5`, le `Opera_5`, le `Hip-Hop/rap_1` et `Dance_1`. On voit bien une opposition d'appréciation entre le côté naturel ou non des sonorités utilisées. 
+
+#### Qualité de représentation
+
+```{r graph var acm cos2}
+fviz_mca_var(resACM, geom = "text",
+                             repel = TRUE,
+                             col.var = "cos2")+
+  scale_color_gradient(low = "#AFAEDF", high = "#FF2900")+
+  ggtitle("Représentation de la qualité des variables")
+```
+
+Pour la qualité de représentation, on retrouve semblablement les mêmes conclusions que pour la contributions aux axes. Les variables les plus éloignées du barycentre vont avoir une meilleure qualité de représentation et sont les mêmes contribuant aux axes.
+
+## Représentation des individus, qualité et représentation
+
+Passons maintenant à la représentation **des individus** dans l'espace pour voir la répartition des individus sur les axes.
+
+```{r graph ind acm}
+fviz_mca_ind(resACM, geom = "text",
+             col.ind ="contrib",
+             alpha.var = 0.75,
+             repel = TRUE) +
+  scale_color_gradient(low = "#AFAEDF", high = "#FF2900")+
+  ggtitle ("Nuage des Contributions des individus")
+
+```
+
+La répartition des individus semblent suivre les modalités. on peut sortir certains individus et les valeurs qu'ils prennent dans ces modalités pour se donner une idée des axes.
+
+```{r tab ind rep}
+tabInd <- rbind(dataACM[771,],dataACM[547,],dataACM[825,],dataACM[449,])
+  kable(tabInd)%>%
+  kable_styling()
+```
+
+Le tableau ci-dessus met en valeurs 4 individus, chacun représentant une extrémité d'un axe auquel chacun contribue grâce au graphique précédent :
+
+- 762 : Gauche axe 1
+- 389 : Droite axe 1
+- 825 : Haut axe 2
+- 251 : Bas axe 2
+
+Les valeurs qu'ils prennent tendent à confirmer notre interprétation des axes 1 et 2.
+
+## Conclusion pour les deux premiers axes
+
+Au vu des variables qualitatives et des valeurs prises par les individus contribuant le plus. On tend à confirmer nos hypothèses concernant les axes 1 et 2 :
+
+- **Axes 1** : Appréciation générale de la musique.
+- **Axes 2** : Appréciation du type de sonorité de la musique (artificielle en bas, naturelle en haut).
+
+Nous avons tenter d'interpréter les axes 3 et 4, mais ils n'en ressortaient aucune informations claires.
+Nos deux axes expliquent donc **11%** de l'inertie.
+
+## Classification
+
+Nous allons effectuer une classification ascendante hiérarchique à partir de l'ACM vu précédemment, et essayer d'identifier des groupes d'individu.
+
+```{r CAH ACM}
+CAH2 <- HCPC(resACM, graph = F, nb.clust = -1, consol = T)
+```
+
+```{r dendog ACM}
+fviz_dend(CAH2, show_labels = F)
+```
+
+Le dendogramme ci-dessus nous montre la répartition des individus en 3 groupes. Le choix de ce nombre a été fait automatiquement par R et semble après d'autres essais être le plus convaincant.
+
+```{r graph clust ACM}
+fviz_cluster(CAH2, geom = "point")+
+  ggplot2::theme_minimal()
+```
+
+Ce graphique montre la répartition des clusters sur les dimensions 1 et 2.
+
+### Variables du cluster 1
+
+Ce tableau nous montre quelle modalité caractérise au mieux une classe en comparant la proportion de cette modalité dans la classe et la proportion de cette modalité dans la population globale. 
+
+```{r var CAH1 clust1}
+CAH2$desc.var$category$`1`%>%
+  kable()%>%
+  kable_styling()%>%
+  scroll_box(height = "500px")
+```
+
+Le cluster 1 est celui regroupant le plus de personnes prenant des modalités `1` pour beaucoup de styles de musiques, voir tous. Ce sont principalement les gens n'aimant vraiment pas un style ou plusieurs. Le cluster se situe à gauche sur l'axe 1 de l'ACM, cela tend à renforcer  notre interprétation de celui-ci. 
+
+### Variables du cluster 2
+
+```{r var CAH1 clust2}
+CAH2$desc.var$category$`2`%>%
+  kable()%>%
+  kable_styling()%>%
+  scroll_box(height = "500px")
+```
+
+Le cluster 2, lui regroupe les modalités `3` et `4`, ce sont des gens qui apprécient la musique en général, mais ont aussi une tendance à préférer légèrement les musiques au sonorités modernes, travaillés, artificielles avec des modalités légérement supérieure pour `Pop`et `Latino`.
+
+### Variables du cluster 3
+
+```{r var CAH1 clust3}
+CAH2$desc.var$category$`3`%>%
+  kable()%>%
+  kable_styling()%>%
+  scroll_box(height = "500px")
+```
+
+Quant au cluster 3, ce sont les individus qui apprécient beaucoup les styles de musiques aux sonorités naturelles avec des modalité `5` pour la plupart des variables. De plus, le cluster se situent dans le coin supérieur droit du graphique, appuyant ainsi nos interprétations des axes.
+
+
+### Conlusion
+
+Les clusters définit par la CAH tendent à confirmer les interprétations que nous avions faites des axes de l'ACM.
+De plus, les clusters s'intersectionnent au niveau du profil moyen, c'est à dire des notes moyennes, et aucune préférence pour un type de sonorité.
+Les individus qui sont à l'intersection des clusters 2 et 3, sont les individus qui apprécient beaucoup la musique en général sans distinction de sonorité, qui sont donc ouvert à tout.
